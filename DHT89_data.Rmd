@@ -1,0 +1,224 @@
+---
+title: "LTER-DHT89 logger data.  View and cleanup data"
+author: "Jim Laundre"
+date: "2024-06-12"
+output:
+  html_document:
+    df_print: paged
+Changes: null
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Required packages and functions.
+
+```{r,warning=FALSE, include=FALSE}
+# -- REQUIRED PACKAGES -------------------------------------------------------
+
+packages <- c("tidyverse","ggplot2","ggtext","janitor",
+              "plotly", "viridis","rstudioapi")
+
+# Packages loading
+invisible(lapply(packages, library, character.only = TRUE))
+
+ #-- FUNCTIONS ---------------------------------------------------------------
+source("./R/importCSdata.r")
+
+```
+# Reading in the rds data file
+
+```{r}
+
+ df_logger <- read_rds(file =  rstudioapi::selectFile(caption = "Select lofgger data rds file",
+                                       filter = "rds files (*.rds)"))
+# _______________________________________________________________________________
+
+```
+# Remove bad data.
+ Bad data.
+ There are duplicate 2021-05-24 15:30:00 records.  Maybe a time correction???. Only one was kept.
+```{r}
+# When the logger was changed the RH wire was put in the wrong port.  
+
+df_logger$RH_3M_CS500[df_logger$timestamp %within% interval(start = "2019-08-16 00:00:00 -09", end = "2020-05-21 12:00:00 -09")] <- NA
+
+# CS500 temperature probe minimum range is -40C with poor accuracy below -39C. Set all values below -39 to NA.
+df_logger$Air_Temperature_3M_CS500[df_logger$Air_Temperature_3M_CS500 < -39] <- NA
+
+#Other data issues
+
+```
+# Plot data
+## - Setup the parameters for ggplotly
+```{r}
+# set the min and max for the initial x axis display in ggplotly
+max_date <- max(df_logger$timestamp)
+min_date <- max_date - lubridate::days(5) 
+
+# ---- Setting up interactive plots with ggplotly-------
+# Note for rangeslider to work:
+# the dynamicTicks needs to be true for the buttons to show
+# autorange needs to be FALSE for range to work
+
+# Define xaxis options for using a range slider
+xax<- list( 
+  autorange=F,
+  range= list(min_date, max_date),
+  rangeselector = list(
+    buttons = list(
+      list(count = 1, label = "1 week", strp ="week", stepmode = "backward"),
+      list(count = 3, label = "3 mo", step = "month", stepmode = "backward"),
+      list(count = 6, label = "6 mo", step = "month", stepmode = "backward"),
+      list(count = 1, label = "YTD", step = "year", stepmode = "todate"),
+      list(step = "all")
+    )),
+  rangeslider = list(type = "date", thickness=0.05))
+# define zoom for y axis
+yax <- list(fixedrange = FALSE)
+
+# Create a list of arguments for the annotation layout to add titles to the subplots
+anno_agr <-list(x = .5,
+                text = "",
+                y = 1,
+                yref = "paper",
+                xref = "paper",
+                xanchor = "center",
+                yanchor = "top",
+                yshift = 20,
+                showarrow = FALSE,
+                font = list(size = 15))
+```
+## - Plot Air Tempertures
+
+```{r}
+
+#Title plot 1
+anno_agr$text <- "Air Temperature"
+
+p1 <-  ggplotly(
+  ggplot(df_logger %>%
+               select(timestamp, contains("air")) %>%    # Reverse order of key so CT is on top                                            
+               pivot_longer(-timestamp, names_to = "key", names_transform = list(key = fct_rev), 
+                            values_to = "value", values_drop_na = TRUE)) +
+  geom_line(aes(x=timestamp,  y = value, color = key)) +
+  geom_hline(aes(yintercept = 0))+
+  scale_x_datetime(expand = expansion(mult = c(.01, .01))) +
+  scale_color_manual(values = c("red","blue","orange")) +
+  labs(title = "Met Data",
+       subtitle = "LTER plots",
+       x = "Date",
+       y = "Degrees Celsius",
+       color = '') +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.7),
+        legend.position = "top"),
+  
+  dynamicTicks = T) %>% 
+  layout(xaxis= xax,
+         yaxis =list(zerolinewidth = .1,fixedrange = FALSE),
+         annotations = anno_agr) %>% 
+  partial_bundle()
+p1
+
+```
+
+## - Plot Relative Humidity
+
+```{r}
+
+#Title plot 2
+anno_agr$text <- "Relative Humidty"
+
+p2 <- ggplotly(
+  ggplot(
+    df_logger %>%
+      select(timestamp, contains("RH")) %>%       # Reverse order of key so CT is on top
+      pivot_longer(
+        -timestamp,
+        names_to = "key",
+        names_transform = list(key = fct_rev),
+        values_to = "value",
+        values_drop_na = TRUE
+      )
+  ) +
+    geom_line(aes(
+      x = timestamp,
+      y = value,
+      color = key,
+      group = desc(key)
+    )) +
+    scale_color_manual(values = c("red", "blue")) +
+    labs(
+      title = "Air RH",
+      x = "Date",
+      y = "Relative Humidity (%)",
+      color = ''
+    ) +
+    coord_cartesian(ylim = c(NA, 100)) +
+    theme_bw() +
+    theme(
+      plot.title = element_text(hjust = 0.7),
+      axis.title.y = element_markdown(color = "black", size = 8)
+    ),
+  
+  dynamicTicks = T
+) %>%
+  layout(xaxis = xax,  yaxis = yax, annotations = anno_agr) %>%
+  partial_bundle()
+
+p2
+  
+```
+
+## - Plot Battery
+
+```{r}
+
+
+#Title plot 3
+anno_agr$text <- "Battery"
+
+p3 <- ggplotly(
+  ggplot(
+    df_logger %>%
+      select(timestamp, contains("Batt")) %>%
+      pivot_longer(
+        -timestamp,
+        names_to = "key",
+        values_to = "value",
+        values_drop_na = TRUE
+      )
+  ) +
+    geom_line(aes(
+      x = timestamp, y = value, color = "Battery avg"
+    )) +
+    scale_x_datetime() +
+    labs(
+      title = "Battery",
+      x = "Date",
+      y = "Volts",
+      color = ''
+    ) +
+    coord_cartesian(ylim = c(8, 15)) +
+    scale_color_manual(values = c("Battery avg" = "black")) +
+    theme_bw(),
+  
+  dynamicTicks = T
+)  %>%
+  layout(xaxis = xax, yaxis = yax, annotations = anno_agr) %>%
+  partial_bundle()
+
+p3
+
+```
+
+## - Panel with all three plots
+```{r}
+
+#Put the plots together on a panel 
+panel1 <- subplot(p2,p1,p3, nrows=3, shareX = TRUE,titleY = T,heights = c(.3,.5,.2),which_layout = 2)
+panel1
+
+```
