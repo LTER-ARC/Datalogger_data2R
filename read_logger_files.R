@@ -150,6 +150,7 @@ df_logger<- df_logger %>%
   #     )
   #)
 
+
 # remove -7999 which is Campbell's missing data value
   df_logger <- df_logger %>% mutate(across(where(is.numeric), ~na_if(.,-7999))) 
 

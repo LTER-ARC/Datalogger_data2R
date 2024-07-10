@@ -28,7 +28,7 @@ source("./R/importCSdata.r")
 
 ```{r}
 
- df_logger <- read_rds(file =  rstudioapi::selectFile(caption = "Select lofgger data rds file",
+ df_logger <- read_rds(file =  rstudioapi::selectFile(caption = "Select logger data rds file",
                                        filter = "rds files (*.rds)"))
 # _______________________________________________________________________________
 
@@ -40,6 +40,7 @@ source("./R/importCSdata.r")
   df_logger <- df_logger %>% mutate(across(where(is.numeric), ~na_if(.,-7999))) 
 
 #Other data issues
+
 
 ```
 # Plot data
@@ -68,7 +69,7 @@ xax<- list(
     )),
   rangeslider = list(type = "date", thickness=0.05))
 # define zoom for y axis
-yax <- list(fixedrange = FALSE)
+yax <- list(fixedrange = FALSE,zerolinewidth = .1)
 
 # Create a list of arguments for the annotation layout to add titles to the subplots
 anno_agr <-list(x = .5,
@@ -87,7 +88,7 @@ anno_agr <-list(x = .5,
 ``` {r}
   
 sp1 <- ggplotly(
-  soil_data %>% select(timestamp, contains("avg")  & -contains("battery")) %>%                                                
+  df_logger %>% select(timestamp, contains("avg")  & -contains("battery")) %>%                                                
   pivot_longer(-timestamp, names_to = "key", values_to = "value", values_drop_na = TRUE) %>%
   ggplot(data=.,aes(x=timestamp, y = value,color=key)) +
   scale_x_datetime()+
@@ -104,7 +105,7 @@ sp1 <- ggplotly(
   ),
   dynamicTicks = T) %>% 
     layout(xaxis= xax,
-         yaxis =list(zerolinewidth = .1,yax),
+         yaxis =yax,
          annotations = anno_agr) %>% 
   partial_bundle()
 sp1
@@ -114,7 +115,7 @@ sp1
 ``` {r}
  
  sp2 <- ggplotly(
- df_logger %>% select(timestamp,contains("watcon")) %>%
+ df_logger %>% select(timestamp,contains("Moisture")) %>%
   gather("key", "value", -timestamp) %>%
   ggplot(data=., aes(x=timestamp, y = value, color = key)) +
   scale_x_datetime()+
