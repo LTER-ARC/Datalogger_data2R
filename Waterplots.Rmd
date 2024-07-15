@@ -37,7 +37,11 @@ source("./R/importCSdata.r")
 
 ```{r}
 # remove -7999 which is Campbell's missing data value
-  df_logger <- df_logger %>% mutate(across(where(is.numeric), ~na_if(.,-7999))) 
+  df_logger <- df_logger %>% 
+  #mutate(across(where(is.numeric), ~na_if(.,-7999))) %>%
+  filter(Battery_Volts > 9.5, timestamp < ymd_hms("2023-09-17 09:00:00", tz ="Etc/GMT+9")) #%>% 
+  mutate(across(c(C3_10cm_AVG,Ca_20cm_AVG,C3_40cm_AVG), ~replace(., timestamp > ymd_hms("2023-08-26 04:00:00",tz ="Etc/GMT+9"), NA))) %>% 
+  mutate(across(everything(), ~replace(., timestamp == ymd_hms("2023-01-11 09:00:00",tz ="Etc/GMT+9"), NA)))
 
 #Other data issues
 
@@ -83,10 +87,38 @@ anno_agr <-list(x = .5,
                 showarrow = FALSE,
                 font = list(size = 15))
 ```
-## - Plot soil Tempertures
+## - Plot soil Temperatures and battery
 
 ``` {r}
-  
+anno_agr$text <- "Battery"
+
+p1 <- ggplotly(
+  ggplot(
+    df_logger %>%
+      select(timestamp, contains("Batt")) %>%
+      pivot_longer(
+        -timestamp,
+        names_to = "key",
+        values_to = "value",
+        values_drop_na = TRUE
+      )
+  ) +
+    geom_line(aes(
+      x = timestamp, y = value, color = "Battery avg"
+    )) +
+    scale_x_datetime() +
+    labs(
+      title = "Battery",
+      x = "Date",
+      y = "Volts",
+      color = ''
+    ) +
+    coord_cartesian(ylim = c(8, 15)) +
+    scale_color_manual(values = c("Battery avg" = "black")) +
+    theme_bw(),
+  dynamicTicks = T  
+)
+
 sp1 <- ggplotly(
   df_logger %>% select(timestamp, contains("avg")  & -contains("battery")) %>%                                                
   pivot_longer(-timestamp, names_to = "key", values_to = "value", values_drop_na = TRUE) %>%
@@ -108,8 +140,8 @@ sp1 <- ggplotly(
          yaxis =yax,
          annotations = anno_agr) %>% 
   partial_bundle()
-sp1
-```
+ subplot(sp1, p1, nrows=2, shareX = TRUE,titleY = T,heights = c(.7,.3))
+``` 
  #- Soil moisture plots
  
 ``` {r}
